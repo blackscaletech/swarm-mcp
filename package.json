@@ -1,5 +1,5 @@
 {
-  "name": "@blackscale/swarm-mcp",
+  "name": "@blackscaletech/swarm-mcp",
   "version": "0.1.0",
   "description": "MCP server for connecting agentic clients to Swarm Spaces.",
   "homepage": "https://swarm.services",
