@@ -59,7 +59,7 @@ export function buildSpaceIntelligenceToolDefinitions() {
     {
       name: "swarm_ask_space",
       title: "Ask Space",
-      description: "Ask a Swarm space for a grounded answer from visible memory.",
+      description: "Ask a Swarm Space for a grounded answer from visible memory. Defaults to the configured Space when space_id is omitted.",
       inputSchema: {
         type: "object",
         properties: {
@@ -70,7 +70,7 @@ export function buildSpaceIntelligenceToolDefinitions() {
           desired_output_shape: DESIRED_OUTPUT_SHAPE_SCHEMA,
           allow_learning_update: { type: "boolean" }
         },
-        required: ["space_id", "question"]
+        required: ["question"]
       }
     },
     {

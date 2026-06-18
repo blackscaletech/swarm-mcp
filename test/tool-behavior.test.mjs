@@ -55,10 +55,12 @@ test("search preserves explicit entity and Space scopes", async () => {
 });
 
 test("ask tools normalize common output-shape shorthands", async () => {
+  let capturedSpaceId = null;
   let capturedInput = null;
   let capturedOptions = null;
   const server = makeServer("operator", {
-    askSpace(_spaceId, input, options) {
+    askSpace(spaceId, input, options) {
+      capturedSpaceId = spaceId;
       capturedInput = input;
       capturedOptions = options;
       return { answer: "ok" };
@@ -80,10 +82,35 @@ test("ask tools normalize common output-shape shorthands", async () => {
   });
 
   assert.equal(response.result.isError, false);
+  assert.equal(capturedSpaceId, "sp_test");
   assert.equal(capturedInput.question, "What changed?");
   assert.equal(capturedInput.desired_output_shape, "brief_with_rationale");
   assert.equal(typeof capturedOptions.idempotencyKey, "string");
   assert.equal(capturedOptions.idempotencyKey.startsWith("swarm-mcp-"), true);
+});
+
+test("ask space defaults to the configured Space when space_id is omitted", async () => {
+  let capturedSpaceId = null;
+  const server = makeServer("operator", {
+    askSpace(spaceId) {
+      capturedSpaceId = spaceId;
+      return { answer: "ok" };
+    }
+  });
+
+  await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize" });
+  const response = await server.handle({
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "swarm_ask_space",
+      arguments: { question: "What changed?" }
+    }
+  });
+
+  assert.equal(response.result.isError, false);
+  assert.equal(capturedSpaceId, "sp_test");
 });
 
 test("tool calls remain access-mode-gated even before tools/list", async () => {

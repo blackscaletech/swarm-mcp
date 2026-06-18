@@ -155,7 +155,7 @@ export async function callIntelligenceTool({ client, accessMode, name, args = {}
     case "swarm_ask_space":
       return textResultWithWarning(
         "Space answer",
-        await client.askSpace(requireSpaceId(args), {
+        await client.askSpace(optionalString(args.space_id) || requireDefaultSpaceId(defaultSpaceId), {
           question: requireString(args.question, "question"),
           objective: optionalString(args.objective),
           constraints: optionalStringArray(args.constraints),
