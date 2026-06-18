@@ -12,7 +12,7 @@
   },
   "type": "module",
   "bin": {
-    "swarm-mcp": "./src/main.mjs"
+    "swarm-mcp": "src/main.mjs"
   },
   "files": [
     "src",
