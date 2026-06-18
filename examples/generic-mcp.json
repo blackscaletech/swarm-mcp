@@ -2,7 +2,7 @@
   "mcpServers": {
     "swarm": {
       "command": "npx",
-      "args": ["-y", "@swarm/mcp"],
+      "args": ["-y", "@blackscale/swarm-mcp"],
       "env": {
         "SWARM_MCP_BASE_URL": "https://api.swarm.services",
         "SWARM_MCP_TOKEN": "swarm_mcp_REPLACE_ME",

@@ -9,7 +9,7 @@ It also exposes MCP-native prompts and resources so attached agents can learn ho
 ## Install
 
 ```sh
-npm install -g @swarm/mcp
+npm install -g @blackscale/swarm-mcp
 ```
 
 Most clients can also run the package directly:
@@ -19,7 +19,7 @@ Most clients can also run the package directly:
   "mcpServers": {
     "swarm": {
       "command": "npx",
-      "args": ["-y", "@swarm/mcp"],
+      "args": ["-y", "@blackscale/swarm-mcp"],
       "env": {
         "SWARM_MCP_BASE_URL": "https://api.swarm.services",
         "SWARM_MCP_TOKEN": "swarm_mcp_...",

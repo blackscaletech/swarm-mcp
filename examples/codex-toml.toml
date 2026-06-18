@@ -1,6 +1,6 @@
 [mcp_servers.swarm]
 command = "npx"
-args = ["-y", "@swarm/mcp"]
+args = ["-y", "@blackscale/swarm-mcp"]
 
 [mcp_servers.swarm.env]
 SWARM_MCP_BASE_URL = "https://api.swarm.services"

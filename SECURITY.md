@@ -14,7 +14,7 @@ Do not include bearer tokens, private keys, raw credentials, cookies, or sensiti
 
 ## Supported Versions
 
-Security fixes target the latest published `@swarm/mcp` release. Upgrade to the latest version before reporting an issue that may already be fixed.
+Security fixes target the latest published `@blackscale/swarm-mcp` release. Upgrade to the latest version before reporting an issue that may already be fixed.
 
 ## Token Handling
 
