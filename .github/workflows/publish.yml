@@ -21,4 +21,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm audit --omit=dev
-      - run: npm publish --access public --provenance
+      - id: package
+        run: |
+          node -e 'const fs = require("node:fs"); const p = JSON.parse(fs.readFileSync("package.json", "utf8")); console.log(`name=${p.name}`); console.log(`version=${p.version}`);' >> "$GITHUB_OUTPUT"
+      - id: published
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.published.outputs.exists != 'true'
+        run: npm publish --access public --provenance
