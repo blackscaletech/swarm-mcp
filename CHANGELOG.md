@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Adds credential-free `--help` and `--version` output for first-run setup checks.
+- Keeps release publishing idempotent when a package version is already live on npm.
+
 ## 0.1.0
 
 - Initial public Swarm MCP server.
