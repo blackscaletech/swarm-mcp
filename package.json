@@ -1,0 +1,41 @@
+{
+  "name": "@blackscale/swarm-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for connecting agentic clients to Swarm Spaces.",
+  "homepage": "https://swarm.services",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blackscaletech/swarm-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/blackscaletech/swarm-mcp/issues"
+  },
+  "type": "module",
+  "bin": {
+    "swarm-mcp": "./src/main.mjs"
+  },
+  "files": [
+    "src",
+    "docs",
+    "examples",
+    "README.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "swarm",
+    "mcp",
+    "agents",
+    "memory"
+  ],
+  "license": "Apache-2.0"
+}
