@@ -9,6 +9,7 @@ export const DEFAULT_TIMEOUT_MS = 30000;
 export const MIN_TIMEOUT_MS = 1000;
 export const MAX_TIMEOUT_MS = 120000;
 export const MAX_STDIN_MESSAGE_BYTES = 2 * 1024 * 1024;
+export const MAX_HTTP_RESPONSE_BYTES = 8 * 1024 * 1024;
 export const MAX_TOOL_ARGUMENT_BYTES = 2 * 1024 * 1024;
 export const MAX_TOOL_STRING_BYTES = 1024 * 1024;
 export const MAX_TOOL_ARRAY_ITEMS = 128;

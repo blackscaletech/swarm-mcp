@@ -23,4 +23,4 @@ The server does not run a local HTTP listener. It reads configuration from envir
 
 ## Public Surface
 
-The package exposes user-facing Swarm capabilities: Space discovery, search, tasks, runs, artifacts, evaluations, context packs, Evolution operations, telemetry, and runtime execution tools. Tool visibility is also filtered by the selected Swarm Connect access mode.
+The package exposes bounded direct reads and typed Commands across Spaces, conversation, Runs, Artifacts, Evaluations, approvals, intelligence, Cores, and Facets. Identity-owned navigation, settings, bookmarks, and staff surfaces remain in the Swarm application. The package does not implement worker leasing or duplicate platform state locally. The Swarm API authorizes every request through the active Credential and resource-scoped Permits.

@@ -1,113 +1,114 @@
-import { SwarmAPIError } from "./http-client.mjs";
-import { SWARM_MCP_LABEL } from "./constants.mjs";
-import { plainTextResult, textResult, validateToolArguments } from "./tool-handler-common.mjs";
-import { ALL_TOOL_NAMES } from "./tool-definitions.mjs";
-import { callExecutionTool } from "./tool-handlers-execution.mjs";
-import { callIntelligenceTool } from "./tool-handlers-intelligence.mjs";
-import { callReadTool } from "./tool-handlers-read.mjs";
+import { SWARM_MCP_LABEL, SWARM_UNTRUSTED_DATA_WARNING } from "./constants.mjs";
+import { SwarmAPIError, pathSegment } from "./http-client.mjs";
+import { ALL_TOOL_NAMES, TOOL_CONTRACT_BY_NAME } from "./tool-contracts.mjs";
+import { validateToolInput } from "./tool-schema.mjs";
 
-export async function callSwarmTool({
-  client,
-  accessMode,
-  tools,
-  allowedToolNames,
-  name,
-  args = {},
-  defaultSpaceId,
-  defaultAgentId
-}) {
+export async function callSwarmTool({ client, allowedToolNames, name, args = {}, defaultSpaceId }) {
   try {
-    assertToolAllowed({ accessMode, tools, allowedToolNames, name });
-    validateToolArguments(args);
-
-    const toolContext = { client, accessMode, name, args, defaultSpaceId, defaultAgentId };
-    const result =
-      await callIntelligenceTool(toolContext) ||
-      await callReadTool(toolContext) ||
-      await callExecutionTool(toolContext);
-
-    return result || unknownToolResult(name);
+    assertAdvertised(allowedToolNames, name);
+    const contract = TOOL_CONTRACT_BY_NAME.get(name);
+    const input = withDefaultSpace(contract, args, defaultSpaceId);
+    validateToolInput(contract.inputSchema, input);
+    const response = await client.request(contract.method, buildPath(contract, input), {
+      query: selectMapped(input, contract.queryParams),
+      body: buildBody(contract, input),
+      idempotencyKey: contract.method === "GET" ? undefined : input.idempotency_key
+    });
+    return toolResult(contract.title, response);
   } catch (error) {
-    if (error instanceof SwarmAPIError) {
-      return textResult(
-        `Swarm API error (${error.status})`,
-        {
-          status: error.status,
-          body: sanitizeSensitiveText(error.body),
-          headers: sanitizeErrorHeaders(error.headers)
-        },
-        true
-      );
+    return toolError(error);
+  }
+}
+
+function withDefaultSpace(contract, args, defaultSpaceId) {
+  const input = { ...args };
+  if (contract.defaultSpace && !input.space_id) {
+    if (!defaultSpaceId) {
+      throw new Error("space_id is required when SWARM_SPACE_ID is not configured");
     }
-    return plainTextResult("Tool execution failed", {
-      error: sanitizeSensitiveText(error.message || String(error))
-    }, true);
+    input.space_id = defaultSpaceId;
   }
+  return input;
 }
 
-function sanitizeErrorHeaders(headers) {
-  const safe = new Set(["content-type", "retry-after", "x-correlation-id", "x-request-id", "x-trace-id"]);
-  const result = {};
-  for (const [key, value] of Object.entries(headers || {})) {
-    const normalized = String(key).toLowerCase();
-    if (safe.has(normalized)) {
-      result[normalized] = sanitizeSensitiveText(value);
+function buildPath(contract, input) {
+  let path = contract.path;
+  for (const [placeholder, field] of Object.entries(contract.pathParams || {})) {
+    path = path.replace(`{${placeholder}}`, pathSegment(input[field]));
+  }
+  if (path.includes("{")) {
+    throw new Error("required path parameter is missing");
+  }
+  return path;
+}
+
+function selectMapped(input, mapping = {}) {
+  const selected = {};
+  for (const [parameter, field] of Object.entries(mapping)) {
+    if (input[field] !== undefined) {
+      selected[parameter] = input[field];
     }
   }
-  return result;
+  return selected;
 }
 
-const MAX_SANITIZE_DEPTH = 8;
-
-export function sanitizeSensitiveText(value, depth = 0) {
-  if (depth > MAX_SANITIZE_DEPTH) {
-    return "[truncated]";
+function buildBody(contract, input) {
+  if (!contract.bodyParams?.length) {
+    return undefined;
   }
-  if (value === null || value === undefined) {
-    return value;
-  }
-  if (typeof value === "string") {
-    return value
-      .replace(/swarm_[a-z0-9_:-]+/gi, "swarm_[redacted]")
-      .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [redacted]")
-      .replace(/sk-[A-Za-z0-9_-]{16,}/g, "sk-[redacted]")
-      .replace(/ghp_[A-Za-z0-9_]{16,}/g, "ghp_[redacted]")
-      .replace(/github_pat_[A-Za-z0-9_]{16,}/g, "github_pat_[redacted]")
-      .replace(/xox[baprs]-[A-Za-z0-9-]{16,}/g, "xox[redacted]")
-      .slice(0, 5000);
-  }
-  if (Array.isArray(value)) {
-    return value.slice(0, 128).map((entry) => sanitizeSensitiveText(entry, depth + 1));
-  }
-  if (typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).slice(0, 128).map(([key, entry]) => [
-        key,
-        /token|secret|credential|authorization/i.test(key) ? "[redacted]" : sanitizeSensitiveText(entry, depth + 1)
-      ])
-    );
-  }
-  return value;
+  return Object.fromEntries(
+    contract.bodyParams
+      .filter((field) => input[field] !== undefined)
+      .map((field) => [field, input[field]])
+  );
 }
 
-function assertToolAllowed({ accessMode, tools, allowedToolNames, name }) {
-  if (!ALL_TOOL_NAMES.has(name)) {
-    return;
-  }
-  const allowed = allowedToolNames || new Set(tools().map((tool) => tool.name));
-  if (!allowed.has(name)) {
-    throw new Error(`Swarm Connect access mode "${accessMode}" does not permit tool ${name}`);
+function assertAdvertised(allowedToolNames, name) {
+  if (!(allowedToolNames || ALL_TOOL_NAMES).has(name) || !TOOL_CONTRACT_BY_NAME.has(name)) {
+    throw new Error("unknown or unadvertised Swarm tool");
   }
 }
 
-function unknownToolResult(name) {
+function toolResult(title, value) {
+  const data = value && typeof value === "object" && !Array.isArray(value) ? value : { data: value };
+  const structuredContent = { ...data, warning: SWARM_UNTRUSTED_DATA_WARNING };
   return {
-    content: [
-      {
-        type: "text",
-        text: `${SWARM_MCP_LABEL}: unknown tool ${name}`
-      }
-    ],
+    content: [{
+      type: "text",
+      text: `${SWARM_MCP_LABEL}: ${title}\nWarning: ${SWARM_UNTRUSTED_DATA_WARNING}\n${JSON.stringify(data, null, 2)}`
+    }],
+    structuredContent,
+    isError: false
+  };
+}
+
+function toolError(error) {
+  const detail = error instanceof SwarmAPIError
+    ? safeAPIError(error)
+    : { message: safeLocalMessage(error?.message) };
+  return {
+    content: [{ type: "text", text: `${SWARM_MCP_LABEL}: request failed\n${JSON.stringify(detail)}` }],
+    structuredContent: detail,
     isError: true
   };
+}
+
+function safeAPIError(error) {
+  const detail = {
+    status: error.status,
+    message: "Swarm rejected the request. Review the tool inputs and current permissions."
+  };
+  for (const key of ["retry-after", "x-correlation-id", "x-request-id", "x-trace-id"]) {
+    if (error.headers?.[key]) {
+      detail[key.replaceAll("-", "_")] = String(error.headers[key]).slice(0, 255);
+    }
+  }
+  return detail;
+}
+
+function safeLocalMessage(message) {
+  const safe = String(message || "Tool execution failed");
+  return /required|invalid|unsupported|allowed|missing|unknown|advertised|length|range|fields|items|nested|format/i.test(safe)
+    ? safe.slice(0, 512)
+    : "Tool execution failed";
 }

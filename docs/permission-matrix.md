@@ -1,12 +1,18 @@
-# Permission Matrix
+# Permission Boundary
 
-Swarm permissions are enforced by the Swarm API. MCP access modes decide which tools the client can see.
+Swarm MCP advertises one canonical tool catalog. Tool discovery does not grant authority.
 
-| Access mode | Intended use | Can mutate Space data | Can execute runs | Can publish artifacts |
-| --- | --- | --- | --- | --- |
-| `read-only` | Space inspection and search | No | No | No |
-| `operator` | Normal Space operation | Yes | Yes | Yes |
+For each request, the Swarm API evaluates:
 
-Default access mode: `operator`.
+| Boundary | Requirement |
+| --- | --- |
+| Authentication | Active Swarm Credential |
+| Tenant | Matching Entity scope |
+| Resource | Matching Space and resource scope |
+| Capability | Required capability key is present |
+| Constraints | Permit constraints match the requested operation |
+| Lifecycle | Credential and Permit are active, unexpired, and not revoked or suspended |
 
-Use a separate Swarm Connect credential for each Space/client identity that should have separate lineage or rotation.
+Reads and mutations use the same server-owned Permit resolver. A credential with inspection-only Permits can see the complete MCP catalog, but mutation requests are denied by the API.
+
+Use separate Swarm Connect credentials when clients or Spaces require independent lineage, scope, expiration, or rotation.

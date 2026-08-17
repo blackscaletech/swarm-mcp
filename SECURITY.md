@@ -18,4 +18,4 @@ Security fixes target the latest published `@blackscaletech/swarm-mcp` release. 
 
 ## Token Handling
 
-`SWARM_MCP_TOKEN` is a bearer token. Store it in your MCP client environment or secret store. Rotate or revoke it from Swarm when it is no longer needed.
+`SWARM_API_TOKEN` is a bearer token. Store it in your MCP client environment or secret store. Rotate or revoke it from Swarm when it is no longer needed.
