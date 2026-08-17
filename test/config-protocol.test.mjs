@@ -3,49 +3,45 @@ import test from "node:test";
 import { resolveConfig } from "../src/config.mjs";
 import { makeServer, listToolNames } from "./helpers.mjs";
 
-test("resolveConfig requires a token and supports read-only Swarm Connect", () => {
-  assert.throws(() => resolveConfig({}), /SWARM_MCP_TOKEN/);
+test("resolveConfig requires canonical Swarm Connect configuration", () => {
+  assert.throws(() => resolveConfig({}), /SWARM_API_TOKEN/);
 
   const config = resolveConfig({
-    SWARM_MCP_TOKEN: "swarm_mcp_test",
-    SWARM_MCP_ACCESS_MODE: "read-only",
-    SWARM_MCP_DEFAULT_SPACE_ID: "sp_test",
-    SWARM_MCP_AGENT_ID: "agt_test"
+    SWARM_API_TOKEN: "swarm_mcp_test",
+    SWARM_SPACE_ID: "sp_test"
   });
 
-  assert.equal(config.accessMode, "read-only");
   assert.equal(config.defaultSpaceId, "sp_test");
-  assert.equal(config.defaultAgentId, "agt_test");
+  assert.equal("defaultAgentId" in config, false);
 });
 
-test("resolveConfig defaults to operator and rejects unsafe base URLs", () => {
+test("resolveConfig rejects unsafe base URLs", () => {
   const config = resolveConfig({
-    SWARM_MCP_TOKEN: "swarm_mcp_test",
+    SWARM_API_TOKEN: "swarm_mcp_test",
     SWARM_MCP_TIMEOUT_MS: "1200"
   });
 
-  assert.equal(config.accessMode, "operator");
   assert.equal(config.timeoutMs, 1200);
   assert.throws(
-    () => resolveConfig({ SWARM_MCP_TOKEN: "swarm_mcp_test", SWARM_MCP_BASE_URL: "file:///tmp/swarm" }),
+    () => resolveConfig({ SWARM_API_TOKEN: "swarm_mcp_test", SWARM_API_BASE_URL: "file:///tmp/swarm" }),
     /valid https URL/
   );
   assert.throws(
-    () => resolveConfig({ SWARM_MCP_TOKEN: "swarm_mcp_test", SWARM_MCP_BASE_URL: "http://api.swarm.services" }),
+    () => resolveConfig({ SWARM_API_TOKEN: "swarm_mcp_test", SWARM_API_BASE_URL: "http://api.swarm.services" }),
     /valid https URL/
   );
   assert.throws(
-    () => resolveConfig({ SWARM_MCP_TOKEN: "swarm_mcp_test", SWARM_MCP_BASE_URL: "http://0.0.0.0:8080" }),
+    () => resolveConfig({ SWARM_API_TOKEN: "swarm_mcp_test", SWARM_API_BASE_URL: "http://0.0.0.0:8080" }),
     /valid https URL/
   );
   assert.equal(
-    resolveConfig({ SWARM_MCP_TOKEN: "swarm_mcp_test", SWARM_MCP_BASE_URL: "http://localhost:8080" }).baseUrl,
+    resolveConfig({ SWARM_API_TOKEN: "swarm_mcp_test", SWARM_API_BASE_URL: "http://localhost:8080" }).baseUrl,
     "http://localhost:8080"
   );
 });
 
 test("server negotiates the latest MCP protocol by default", async () => {
-  const server = makeServer("read-only");
+  const server = makeServer();
   const init = await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
 
   assert.equal(init.result.protocolVersion, "2025-11-25");
@@ -54,7 +50,7 @@ test("server negotiates the latest MCP protocol by default", async () => {
 });
 
 test("server returns the canonical protocol version for unsupported requests", async () => {
-  const server = makeServer("read-only");
+  const server = makeServer();
   const init = await server.handle({
     jsonrpc: "2.0",
     id: 1,
@@ -66,50 +62,34 @@ test("server returns the canonical protocol version for unsupported requests", a
 });
 
 test("initialized notification does not create a response", async () => {
-  const server = makeServer("operator");
+  const server = makeServer();
   const response = await server.handle({ jsonrpc: "2.0", method: "notifications/initialized" });
   assert.equal(response, null);
 });
 
-test("read-only mode exposes read tools without mutation tools", async () => {
-  const toolNames = await listToolNames(makeServer("read-only"));
+test("canonical catalog exposes reads, mutations, intelligence, and execution tools", async () => {
+  const toolNames = await listToolNames(makeServer());
 
-  assert.ok(toolNames.includes("swarm_search"));
-  assert.ok(toolNames.includes("swarm_discover_space_contract"));
-  assert.ok(toolNames.includes("swarm_list_space_capabilities"));
+  assert.ok(toolNames.includes("swarm_get_space"));
   assert.ok(toolNames.includes("swarm_list_operations"));
-  assert.ok(!toolNames.includes("swarm_create_task"));
-  assert.ok(!toolNames.includes("swarm_complete_run"));
-});
-
-test("operator mode exposes normal Space work and Evolution tools", async () => {
-  const toolNames = await listToolNames(makeServer("operator"));
-
-  assert.ok(toolNames.includes("swarm_create_task"));
+  assert.ok(toolNames.includes("swarm_get_space_facet_catalog"));
+  assert.ok(toolNames.includes("swarm_post_message"));
+  assert.ok(toolNames.includes("swarm_request_agent"));
   assert.ok(toolNames.includes("swarm_launch_run"));
-  assert.ok(toolNames.includes("swarm_create_operation"));
-  assert.ok(toolNames.includes("swarm_cancel_operation"));
-  assert.ok(toolNames.includes("swarm_acquire_next_run"));
-  assert.ok(toolNames.includes("swarm_complete_run"));
   assert.ok(toolNames.includes("swarm_create_artifact"));
-  assert.ok(toolNames.includes("swarm_record_action_trace"));
+  assert.ok(toolNames.includes("swarm_install_facet"));
+  assert.ok(toolNames.includes("swarm_get_artifact_content"));
+  assert.equal(toolNames.includes("swarm_create_task"), false);
+  assert.equal(toolNames.includes("swarm_acquire_next_run"), false);
 });
 
 test("server exposes Swarm workflow prompts", async () => {
-  const server = makeServer("operator");
+  const server = makeServer();
   await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize" });
 
   const listed = await server.handle({ jsonrpc: "2.0", id: 2, method: "prompts/list" });
   const promptNames = listed.result.prompts.map((prompt) => prompt.name);
-  assert.deepEqual(promptNames, [
-    "swarm_onboarding",
-    "swarm_operate_space",
-    "swarm_execute_assigned_run",
-    "swarm_publish_durable_artifact",
-    "swarm_context_pack_workflow",
-    "swarm_security_posture",
-    "swarm_weekly_digest"
-  ]);
+  assert.deepEqual(promptNames, ["swarm_operate_space", "swarm_publish_result", "swarm_security_posture"]);
 
   const prompt = await server.handle({
     jsonrpc: "2.0",
@@ -119,18 +99,18 @@ test("server exposes Swarm workflow prompts", async () => {
       name: "swarm_operate_space",
       arguments: {
         goal: "Build a durable public automation Space",
-        agent_role: "curator"
+        space_id: "sp_test"
       }
     }
   });
 
   assert.equal(prompt.result.messages[0].role, "user");
   assert.match(prompt.result.messages[0].content.text, /Build a durable public automation Space/);
-  assert.match(prompt.result.messages[0].content.text, /Persist all useful outputs in Swarm/);
+  assert.match(prompt.result.messages[0].content.text, /swarm_get_space/);
 });
 
 test("server exposes sanitized Swarm resources", async () => {
-  const server = makeServer("operator");
+  const server = makeServer();
   await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize" });
 
   const listed = await server.handle({ jsonrpc: "2.0", id: 2, method: "resources/list" });
@@ -145,25 +125,7 @@ test("server exposes sanitized Swarm resources", async () => {
     params: { uri: "swarm://connection/status" }
   });
   const text = resource.result.contents[0].text;
-  assert.match(text, /"access_mode": "operator"/);
-  assert.match(text, /"token_value": "\[redacted\]"/);
+  assert.doesNotMatch(text, /access_mode/);
+  assert.match(text, /"authenticated": true/);
   assert.doesNotMatch(text, /swarm_mcp_test/);
-});
-
-test("bootstrap tool gives a safe first-run connection summary", async () => {
-  const server = makeServer("operator");
-  await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize" });
-  const response = await server.handle({
-    jsonrpc: "2.0",
-    id: 2,
-    method: "tools/call",
-    params: { name: "swarm_bootstrap", arguments: {} }
-  });
-
-  assert.equal(response.result.isError, false);
-  assert.equal(response.result.structuredContent.access_mode, "operator");
-  assert.equal(response.result.structuredContent.default_space_id, "sp_test");
-  assert.equal(response.result.structuredContent.default_agent_id, "agt_test");
-  assert.equal(response.result.structuredContent.token_value, "[redacted]");
-  assert.doesNotMatch(response.result.content[0].text, /swarm_mcp_test/);
 });

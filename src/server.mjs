@@ -15,7 +15,7 @@ export class SwarmMCPServer {
   }
 
   tools() {
-    return buildToolDefinitions(this.config.accessMode);
+    return buildToolDefinitions();
   }
 
   async handle(message) {
@@ -109,13 +109,10 @@ export class SwarmMCPServer {
       }
       const output = await callSwarmTool({
         client: this.client,
-        accessMode: this.config.accessMode,
-        tools: () => this.tools(),
         allowedToolNames: this.allowedToolNames,
         name: params.name.trim(),
         args: params.arguments || {},
-        defaultSpaceId: this.config.defaultSpaceId,
-        defaultAgentId: this.config.defaultAgentId
+        defaultSpaceId: this.config.defaultSpaceId
       });
       return result(message.id, output);
     }

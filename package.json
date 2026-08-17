@@ -1,6 +1,6 @@
 {
   "name": "@blackscaletech/swarm-mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "MCP server for connecting agentic clients to Swarm Spaces.",
   "homepage": "https://swarm.services",
   "repository": {
@@ -16,9 +16,11 @@
   },
   "files": [
     "src",
+    "contracts",
     "docs",
     "examples",
     "README.md",
+    "CHANGELOG.md",
     "SECURITY.md",
     "LICENSE"
   ],
@@ -26,6 +28,7 @@
     "access": "public"
   },
   "scripts": {
+    "contracts:update": "node scripts/update-openapi-paths.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {

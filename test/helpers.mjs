@@ -1,13 +1,11 @@
 import { SwarmMCPServer } from "../src/server.mjs";
 
-export function makeServer(accessMode, client = {}) {
+export function makeServer(client = {}) {
   return new SwarmMCPServer({
     config: {
       baseUrl: "https://api.swarm.services",
       token: "swarm_mcp_test",
       defaultSpaceId: "sp_test",
-      defaultAgentId: "agt_test",
-      accessMode,
       serverName: "Swarm MCP Test"
     },
     client

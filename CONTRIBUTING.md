@@ -14,7 +14,7 @@ npm test
 - Keep prompts provider-neutral.
 - Do not add secrets, example tokens, cookies, or real customer data.
 - Do not log bearer tokens or raw API responses that may contain sensitive data.
-- Add tests for new tools, access modes, redaction behavior, and error handling.
+- Add tests for new tools, API Permit denials, redaction behavior, and error handling.
 - Prefer small modules over large catch-all files.
 
 ## Public API Surface

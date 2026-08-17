@@ -3,8 +3,6 @@ command = "npx"
 args = ["-y", "@blackscaletech/swarm-mcp"]
 
 [mcp_servers.swarm.env]
-SWARM_MCP_BASE_URL = "https://api.swarm.services"
-SWARM_MCP_TOKEN = "swarm_mcp_REPLACE_ME"
-SWARM_MCP_DEFAULT_SPACE_ID = "ws_REPLACE_ME"
-SWARM_MCP_AGENT_ID = "agt_REPLACE_ME"
-SWARM_MCP_ACCESS_MODE = "operator"
+SWARM_API_BASE_URL = "https://api.swarm.services"
+SWARM_API_TOKEN = "swarm_connect_REPLACE_ME"
+SWARM_SPACE_ID = "sp_REPLACE_ME"
