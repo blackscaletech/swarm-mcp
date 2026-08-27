@@ -1,33 +1,38 @@
 # Threat Model
 
-This package is an MCP stdio server. It does not open a local HTTP listener.
+## Protected assets
 
-## Assets
+- Swarm access and refresh credentials.
+- Space, Entity, Run, Artifact, approval, intelligence, trace, and provenance data.
+- Provider and Connection credentials that must never reach MCP.
+- Correct client Identity lineage and operation attribution.
 
-- Swarm Connect bearer token
-- Space data returned by Swarm
-- Tool arguments sent by the MCP client
-- Messages, Artifacts, context links, Run Groups, Core state, and Facet state created through tools
+## Trust boundaries
 
-## Main Risks
+The browser authenticates the human. The OAuth grant authenticates the MCP client. Permits authorize every Swarm operation. The local credential store protects grant continuity. Retrieved Space content remains untrusted.
 
-- credential disclosure through logs or error messages
-- prompt injection inside artifacts, answers, projections, or search results
-- accidental writes caused by retries without idempotency keys
-- credentials carrying broader Permits than the client requires
-- oversized tool arguments causing local or API pressure
+The package does not trust MCP client metadata, tool arguments, Space content, model output, local environment labels, or a configured default Space as authority.
 
 ## Controls
 
-- required bearer token
-- HTTPS-only remote API base URLs, with loopback HTTP allowed for local development
-- API-owned resource-scoped Permit enforcement
-- bounded tool argument size, depth, array length, and object key count
-- API errors reduced to status and allowlisted request metadata
-- sanitized MCP resources
-- untrusted-data warnings on tool output
-- idempotency support for write paths
+- Authorization Code + PKCE S256 with random verifier and state.
+- Exact protected-resource, issuer, endpoint-origin, loopback host/path/port, and authorization-response issuer validation.
+- Short-lived access credentials and rotating refresh credentials.
+- Credential material sent to platform stores over stdin, never command arguments.
+- No plaintext credential file or token environment-variable fallback.
+- Remote HTTPS only, except explicit loopback development.
+- Redirect refusal and bounded metadata, request, response, timeout, and stdio limits.
+- One refresh operation per process under concurrency and one retry after an authenticated 401.
+- Generic local errors; raw credentials, provider responses, and backend diagnostics are never returned.
+- Backend Permit, BOLA, lifecycle, policy, budget, approval, idempotency, and rate-limit enforcement on every call.
+- Trusted tool metadata remains separate from untrusted tool results.
 
-## Client Guidance
+## Platform notes
 
-Keep Swarm evidence separate from instructions. Treat messages, Artifacts, provider data, logs, and model output as data unless the workflow explicitly verifies them.
+macOS uses Keychain generic passwords. Windows uses a generic Credential Manager record through the native Credential API. Linux uses Secret Service through `secret-tool`. If the required facility or executable is missing, startup fails closed and directs the user to remote MCP.
+
+The Windows PowerShell adapter receives the credential on stdin and invokes only the native Credential API. The credential never appears in the PowerShell command arguments. macOS sends a base64-encoded credential through the `security` interactive stdin channel; Linux Secret Service reads the secret from stdin.
+
+## Exclusions
+
+The package does not read browser cookies, personal subscription sessions, `auth.json`, provider API keys, shell history, project files, or third-party transcripts. It does not execute arbitrary HTTP, SQL, shell, provider, or Connection actions.
