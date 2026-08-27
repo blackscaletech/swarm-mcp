@@ -1,8 +1,9 @@
+# Prefer Codex remote MCP configuration when available:
+# url = "https://api.swarm.services/mcp"
+
 [mcp_servers.swarm]
 command = "npx"
-args = ["-y", "@blackscaletech/swarm-mcp"]
+args = ["-y", "@blackscaletech/swarm-mcp@0.3.0"]
 
-[mcp_servers.swarm.env]
-SWARM_API_BASE_URL = "https://api.swarm.services"
-SWARM_API_TOKEN = "swarm_connect_REPLACE_ME"
-SWARM_SPACE_ID = "sp_REPLACE_ME"
+# Run this once before starting Codex:
+# npx -y @blackscaletech/swarm-mcp@0.3.0 connect

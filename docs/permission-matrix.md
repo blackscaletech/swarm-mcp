@@ -1,18 +1,17 @@
-# Permission Boundary
+# Permission Model
 
-Swarm MCP advertises one canonical tool catalog. Tool discovery does not grant authority.
+OAuth scopes establish MCP resource and refresh eligibility. They do not authorize Swarm operations.
 
-For each request, the Swarm API evaluates:
-
-| Boundary | Requirement |
+| Boundary | Authority |
 | --- | --- |
-| Authentication | Active Swarm Credential |
-| Tenant | Matching Entity scope |
-| Resource | Matching Space and resource scope |
-| Capability | Required capability key is present |
-| Constraints | Permit constraints match the requested operation |
-| Lifecycle | Credential and Permit are active, unexpired, and not revoked or suspended |
+| Browser sign-in | Authenticates the human approving setup. |
+| OAuth grant | Creates the client Identity, Credential, selected-Space Access Assignments, and effective Permits. |
+| Operating-system store | Proves continuity for one local profile; grants no Swarm authority itself. |
+| `tools/list` | Filters tool definitions by the client Identity's current effective Permits. |
+| `tools/call` | Rechecks Identity, Credential, Permit, Entity, Space, resource, lifecycle, policy, and idempotency. |
+| Approval-gated action | Requires the canonical approval and Connection action path. |
+| Local `SWARM_SPACE_ID` | Supplies a convenience argument only; it cannot broaden access. |
 
-Reads and mutations use the same server-owned Permit resolver. A credential with inspection-only Permits can see the complete MCP catalog, but mutation requests are denied by the API.
+Default authorization is full Swarm operation access within the Spaces explicitly selected during setup. It does not imply staff access, Entity security administration, billing administration, credential administration, or unrelated Connection authority.
 
-Use separate Swarm Connect credentials when clients or Spaces require independent lineage, scope, expiration, or rotation.
+Revoking a Permit takes effect without waiting for the OAuth access token to expire. Disconnecting the client in Swarm revokes its Credential and effective Permits while retaining historical attribution.

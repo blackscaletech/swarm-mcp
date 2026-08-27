@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "swarm.mcp.remote-contract.v1",
+  "package": "@blackscaletech/swarm-mcp",
+  "packageVersion": "0.3.0",
+  "clientId": "https://swarm.services/clients/swarm-mcp",
+  "resourcePath": "/mcp",
+  "nativeProtocolVersion": "2026-07-28",
+  "stdioProtocolVersion": "2025-11-25",
+  "authorization": {
+    "flow": "authorization-code-pkce",
+    "applicationType": "native",
+    "issuerResponseRequired": true,
+    "resourceIndicatorRequired": true,
+    "secureStores": ["macos-keychain", "windows-credential-manager", "linux-secret-service"],
+    "plaintextFallback": false
+  },
+  "toolCatalog": {
+    "authority": "remote-permit-filtered",
+    "localCopy": false,
+    "families": [
+      "space-context",
+      "work-and-runs",
+      "artifacts-and-evaluations",
+      "approvals",
+      "intelligence",
+      "provenance-and-graph",
+      "trace-summary-and-batch",
+      "checkpoint-and-handoff"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "@blackscaletech/swarm-mcp",
-  "version": "0.2.0",
-  "description": "MCP server for connecting agentic clients to Swarm Spaces.",
+  "version": "0.3.0",
+  "description": "Secure stdio bridge for connecting MCP clients to Swarm.",
   "homepage": "https://swarm.services",
   "repository": {
     "type": "git",
@@ -28,7 +28,6 @@
     "access": "public"
   },
   "scripts": {
-    "contracts:update": "node scripts/update-openapi-paths.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "engines": {

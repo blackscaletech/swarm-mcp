@@ -1,21 +1,9 @@
 # Security
 
-Report suspected vulnerabilities to hello@swarm.services.
+Report vulnerabilities privately through the repository security advisory flow. Do not include access tokens, refresh tokens, provider credentials, Space content, or customer data in an issue.
 
-Include:
+Supported releases are listed in published package metadata. Keep Swarm MCP and the matching Swarm API revision aligned.
 
-- affected package version
-- MCP client and operating system
-- reproduction steps
-- expected impact
-- any relevant Swarm request ID
+The package never requests provider credentials and never reads Codex, Claude, browser, shell, or other local authentication stores. Swarm access is stored only through the operating-system credential service. If that service is unavailable, setup fails closed.
 
-Do not include bearer tokens, private keys, raw credentials, cookies, or sensitive customer data in the report.
-
-## Supported Versions
-
-Security fixes target the latest published `@blackscaletech/swarm-mcp` release. Upgrade to the latest version before reporting an issue that may already be fixed.
-
-## Token Handling
-
-`SWARM_API_TOKEN` is a bearer token. Store it in your MCP client environment or secret store. Rotate or revoke it from Swarm when it is no longer needed.
+Before reporting an authentication problem, revoke the affected app in Swarm. Do not paste credential material into logs, screenshots, prompts, artifacts, or bug reports.

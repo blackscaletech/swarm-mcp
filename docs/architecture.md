@@ -1,26 +1,26 @@
 # Architecture
 
-Swarm MCP is one MCP stdio server that connects an MCP-compatible client to Swarm through a Swarm Connect credential.
-
-## Runtime Shape
+Swarm MCP has two transports over one backend authority:
 
 ```text
-MCP client
-  -> Swarm MCP stdio server
-  -> Swarm API
-  -> Space-scoped Swarm primitives
+MCP app -> remote HTTPS /mcp -> Commands, Permits, services
+MCP app -> local stdio bridge -> remote HTTPS /mcp -> Commands, Permits, services
 ```
 
-The server does not run a local HTTP listener. It reads configuration from environment variables, exposes MCP tools/prompts/resources, sends authorized API requests to Swarm, and returns sanitized MCP responses.
+Remote MCP is preferred. The package exists only for clients that require stdio. It translates local MCP framing into the stateless remote protocol and returns the backend response unchanged after bounded validation.
 
-## Design Rules
+## Modules
 
-- Keep Swarm behavior in this shared MCP core.
-- Keep client-specific installers thin.
-- Keep authority server-side through Swarm credentials and Space permissions.
-- Keep returned Space content as untrusted evidence, not executable instruction text.
-- Keep write retries idempotent when the tool supports an idempotency key.
+- `src/auth`: browser authorization, PKCE, token rotation, and operating-system stores.
+- `src/config`: non-secret endpoint and profile configuration.
+- `src/protocol`: local MCP negotiation and request routing.
+- `src/transports`: stdio framing.
+- `src/swarm-api`: bounded remote MCP requests and canonical errors.
+- `src/prompts`: continuity guidance.
+- `src/resources`: sanitized local status and security guidance.
 
-## Public Surface
+The package has no local tool registry. `tools/list` comes from the remote endpoint after current Permit resolution, so stdio and remote clients see the same capability-filtered definitions. `tools/call` is revalidated by Swarm even if a client bypasses local discovery.
 
-The package exposes bounded direct reads and typed Commands across Spaces, conversation, Runs, Artifacts, Evaluations, approvals, intelligence, Cores, and Facets. Identity-owned navigation, settings, bookmarks, and staff surfaces remain in the Swarm application. The package does not implement worker leasing or duplicate platform state locally. The Swarm API authorizes every request through the active Credential and resource-scoped Permits.
+One OAuth grant creates one client Identity and rotating refresh family. The user selects one or more Spaces during browser authorization. Each tool invocation remains scoped to one explicit Space unless Swarm exposes a separately registered cross-Space Command.
+
+No transcript, Artifact body, model payload, provider credential, or Swarm bearer credential is authoritative in this process. Canonical state remains in Swarm services and storage.

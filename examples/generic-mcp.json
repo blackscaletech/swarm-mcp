@@ -2,12 +2,7 @@
   "mcpServers": {
     "swarm": {
       "command": "npx",
-      "args": ["-y", "@blackscaletech/swarm-mcp"],
-      "env": {
-        "SWARM_API_BASE_URL": "https://api.swarm.services",
-        "SWARM_API_TOKEN": "swarm_connect_REPLACE_ME",
-        "SWARM_SPACE_ID": "sp_REPLACE_ME"
-      }
+      "args": ["-y", "@blackscaletech/swarm-mcp@0.3.0"]
     }
   }
 }

@@ -2,16 +2,15 @@ import { PACKAGE_VERSION } from "./package-info.mjs";
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
 const VERSION_FLAGS = new Set(["--version", "-v"]);
+const COMMANDS = new Set(["connect", "disconnect", "status"]);
 
-export function resolveCLIResponse(args = []) {
+export function resolveCLICommand(args = []) {
   const normalized = args.map((arg) => String(arg || "").trim()).filter(Boolean);
-  if (normalized.some((arg) => HELP_FLAGS.has(arg))) {
-    return renderHelp();
-  }
-  if (normalized.some((arg) => VERSION_FLAGS.has(arg))) {
-    return `${PACKAGE_VERSION}\n`;
-  }
-  return null;
+  if (normalized.some((arg) => HELP_FLAGS.has(arg))) return { kind: "output", text: renderHelp() };
+  if (normalized.some((arg) => VERSION_FLAGS.has(arg))) return { kind: "output", text: `${PACKAGE_VERSION}\n` };
+  if (normalized.length === 0) return { kind: "serve" };
+  if (normalized.length === 1 && COMMANDS.has(normalized[0])) return { kind: normalized[0] };
+  throw new Error("Unknown Swarm MCP command. Run `swarm-mcp --help`.");
 }
 
 export function renderHelp() {
@@ -19,19 +18,19 @@ export function renderHelp() {
     `Swarm MCP ${PACKAGE_VERSION}`,
     "",
     "Usage:",
-    "  swarm-mcp",
+    "  swarm-mcp connect       Connect in your browser",
+    "  swarm-mcp               Start the MCP stdio bridge",
+    "  swarm-mcp status        Check local connection state",
+    "  swarm-mcp disconnect    Remove access from this device",
     "",
-    "Required environment:",
-    "  SWARM_API_TOKEN              Swarm Connect token",
+    "Non-secret configuration:",
+    "  SWARM_API_BASE_URL      Swarm API origin (default: https://api.swarm.services)",
+    "  SWARM_MCP_PROFILE       Local profile name (default: default)",
+    "  SWARM_SPACE_ID          Optional convenience Space; authority stays server-owned",
+    "  SWARM_MCP_TIMEOUT_MS    Request timeout from 1000 to 120000 milliseconds",
     "",
-    "Common environment:",
-    "  SWARM_API_BASE_URL           Swarm API URL, defaults to https://api.swarm.services",
-    "  SWARM_SPACE_ID               Default Space for tool calls",
-    "  SWARM_MCP_TIMEOUT_MS          Request timeout in milliseconds",
-    "",
-    "Examples:",
-    "  SWARM_API_TOKEN=... swarm-mcp",
-    "  npx @blackscaletech/swarm-mcp",
+    "Swarm access is stored in Keychain, Credential Manager, or Secret Service.",
+    "No token file or token environment variable is supported.",
     ""
   ].join("\n");
 }
