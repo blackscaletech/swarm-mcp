@@ -28,7 +28,7 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node ./scripts/run-tests.mjs"
   },
   "engines": {
     "node": ">=20"
