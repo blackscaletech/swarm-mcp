@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Styled native OAuth callback outcomes to match Swarm sign-in, with responsive layout and no external assets.
+- Clarified that receiving authorization is a handoff to the app, not proof that token exchange or secure credential storage has completed.
+- Retained callback validation and restrictive security headers; inline styles are allowed only by their exact CSP hash.
+
 ## 0.3.0
 
 - Added browser-based stdio pairing with PKCE and issuer-bound OAuth responses.

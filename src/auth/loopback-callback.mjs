@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
+import { writeCallbackPage } from "./callback-page.mjs";
 
 const CALLBACK_PATH = "/swarm-mcp/callback";
 const CALLBACK_TIMEOUT_MS = 5 * 60_000;
@@ -17,7 +18,7 @@ export async function createLoopbackCallback({ issuer, state, timeoutMs = CALLBA
   let settled = false;
   const server = createServer({ maxHeaderSize: 8 * 1024, requestTimeout: 10_000 }, (request, response) => {
     const reject = (status) => {
-      safePage(response, status, "Swarm connection could not be verified. You may close this tab.");
+      writeCallbackPage(response, status, "failed");
       invalidCallbacks += 1;
       if (invalidCallbacks >= MAX_INVALID_CALLBACKS) settle(new Error("Swarm could not verify the browser authorization response"));
     };
@@ -31,13 +32,13 @@ export async function createLoopbackCallback({ issuer, state, timeoutMs = CALLBA
     if (callback.pathname !== CALLBACK_PATH || callback.origin !== new URL(redirectUri).origin || !exactQuery(callback.searchParams)) return reject(400);
     if (!safeEqual(callback.searchParams.get("state"), state) || callback.searchParams.get("iss") !== issuer) return reject(400);
     if (callback.searchParams.get("error")) {
-      safePage(response, 200, "Swarm access was not connected. You may close this tab.");
+      writeCallbackPage(response, 200, "canceled");
       settle(new Error("Swarm access was not approved"));
       return;
     }
     const code = callback.searchParams.get("code") || "";
     if (!/^[A-Za-z0-9._~-]{43,512}$/.test(code)) return reject(400);
-    safePage(response, 200, "Swarm is connected. You may close this tab.");
+    writeCallbackPage(response, 200, "received");
     settle(null, code);
   });
   server.keepAliveTimeout = 1_000;
@@ -77,19 +78,4 @@ function safeEqual(left, right) {
   const leftBuffer = Buffer.from(String(left || ""));
   const rightBuffer = Buffer.from(String(right || ""));
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function safePage(response, status, message) {
-  const body = `<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Swarm</title></head><body><main><h1>${message}</h1></main></body></html>`;
-  response.writeHead(status, {
-    "Cache-Control": "no-store",
-    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-    "Content-Type": "text/html; charset=utf-8",
-    "Cross-Origin-Opener-Policy": "same-origin",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Referrer-Policy": "no-referrer",
-    "X-Frame-Options": "DENY",
-    "X-Content-Type-Options": "nosniff"
-  });
-  response.end(body);
 }
