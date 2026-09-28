@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 - 2026-09-28
 
 - Styled native OAuth callback outcomes to match Swarm sign-in, with responsive layout and no external assets.
 - Clarified that receiving authorization is a handoff to the app, not proof that token exchange or secure credential storage has completed.

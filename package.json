@@ -1,6 +1,6 @@
 {
   "name": "@blackscaletech/swarm-mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Secure stdio bridge for connecting MCP clients to Swarm.",
   "homepage": "https://swarm.services",
   "repository": {
