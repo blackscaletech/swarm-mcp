@@ -9,10 +9,11 @@ export class RemoteMCPClient {
     this.config = config;
     this.tokenManager = tokenManager;
     this.fetchImpl = fetchImpl;
+    this.spaceScopedTools = new Set();
   }
 
   async request(message) {
-    const native = nativeRequest(message, this.config.defaultSpaceId);
+    const native = nativeRequest(message, this.config.defaultSpaceId, this.spaceScopedTools);
     let token = await this.tokenManager.accessToken();
     let result = await this.send(native, token);
     if (result.response.status === 401) {
@@ -22,6 +23,15 @@ export class RemoteMCPClient {
     if (result.response.status === 401) throw new Error("Swarm access is no longer active. Run `swarm-mcp connect` again.");
     if (!isRecord(result.value) || result.value.jsonrpc !== "2.0" || !sameID(result.value.id, message.id)) {
       throw new Error("Swarm returned an invalid MCP response");
+    }
+    if (message.method === "tools/list" && Array.isArray(result.value.result?.tools)) {
+      const names = message.params?.cursor ? new Set(this.spaceScopedTools) : new Set();
+      for (const tool of result.value.result.tools) {
+        if (typeof tool?.name === "string" && tool.inputSchema?.properties?.space_id?.type === "string") {
+          names.add(tool.name);
+        }
+      }
+      this.spaceScopedTools = names;
     }
     return result.value;
   }
@@ -55,10 +65,11 @@ export class RemoteMCPClient {
   }
 }
 
-export function nativeRequest(message, defaultSpaceId = "") {
+export function nativeRequest(message, defaultSpaceId = "", spaceScopedTools = new Set()) {
   const params = isRecord(message.params) ? { ...message.params } : {};
   delete params._meta;
-  if (message.method === "tools/call" && defaultSpaceId && isRecord(params.arguments) && !params.arguments.space_id) {
+  if (message.method === "tools/call" && defaultSpaceId && spaceScopedTools.has(params.name) &&
+      isRecord(params.arguments) && !params.arguments.space_id) {
     params.arguments = { ...params.arguments, space_id: defaultSpaceId };
   }
   if (message.method !== "server/discover") {
