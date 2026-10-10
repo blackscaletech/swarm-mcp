@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 - 2026-10-10
+
+- Apply the configured default Space only to tools whose current remote schema accepts a Space ID.
+- Keep resource-specific commands, including task updates and Run controls, free of unsupported arguments.
+- Preserve paginated tool discovery and reset cached schema information when refreshing the catalog.
+
 ## 0.3.1 - 2026-09-28
 
 - Styled native OAuth callback outcomes to match Swarm sign-in, with responsive layout and no external assets.
