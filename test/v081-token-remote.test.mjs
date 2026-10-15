@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TokenManager } from "../src/auth/token-manager.mjs";
 import { RemoteMCPClient, nativeRequest } from "../src/swarm-api/remote-mcp-client.mjs";
-import { jsonResponse, testConfig, testCredential } from "./v081-helpers.mjs";
+import { fakeSecureStore, jsonResponse, testConfig, testCredential } from "./v081-helpers.mjs";
 
 test("concurrent expiry refresh collapses to one rotating-token request and one store write", async () => {
   const config = testConfig();
@@ -12,7 +12,7 @@ test("concurrent expiry refresh collapses to one rotating-token request and one 
   const manager = new TokenManager({
     config,
     now: () => Date.parse("2026-08-25T12:00:00.000Z"),
-    store: { load: async () => credential, save: async () => { saved += 1; } },
+    store: fakeSecureStore(config, credential, { save: async (account) => { if (account === config.credentialAccount) saved += 1; } }).store,
     fetchImpl: async () => {
       calls += 1;
       await new Promise((resolve) => setTimeout(resolve, 5));
@@ -35,7 +35,7 @@ test("refresh fails closed when the server does not rotate the refresh credentia
   const manager = new TokenManager({
     config,
     now: () => Date.parse("2026-08-25T12:00:00.000Z"),
-    store: { load: async () => credential, save: async () => { throw new Error("must not save"); } },
+    store: fakeSecureStore(config, credential, { save: async (account) => { if (account === config.credentialAccount) throw new Error("must not save"); } }).store,
     fetchImpl: async () => jsonResponse({
       access_token: "swa_" + "b".repeat(64), expires_in: 600,
       refresh_token: credential.refreshToken, scope: "mcp offline_access", token_type: "Bearer"

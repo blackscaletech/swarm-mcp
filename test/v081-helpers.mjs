@@ -1,5 +1,29 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after } from "node:test";
 import { createCredential } from "../src/auth/credential.mjs";
+import { serializeCredential } from "../src/auth/credential.mjs";
+import { createSecureCredentialStore } from "../src/auth/secure-store.mjs";
 import { resolveRuntimeConfig } from "../src/config/runtime.mjs";
+
+const fakeDirectories = [];
+after(() => { for (const path of fakeDirectories) rmSync(path, { recursive: true, force: true }); });
+
+export function fakeSecureStore(config, credential = null, hooks = {}) {
+  const records = new Map();
+  if (credential) records.set(config.credentialAccount, serializeCredential(credential, config));
+  const lockDirectory = mkdtempSync(join(tmpdir(), "swarm-mcp-fake-locks-"));
+  fakeDirectories.push(lockDirectory);
+  const adapterFactory = (scoped) => ({
+    name: "Test secure store",
+    async load() { await hooks.load?.(scoped.credentialAccount); return records.get(scoped.credentialAccount) || null; },
+    async save(value) { await hooks.save?.(scoped.credentialAccount, value); records.set(scoped.credentialAccount, value); },
+    async remove() { await hooks.remove?.(scoped.credentialAccount); return records.delete(scoped.credentialAccount); }
+  });
+  const create = () => createSecureCredentialStore(config, { adapterFactory, lockDirectory });
+  return { store: create(), create, records, lockDirectory };
+}
 
 export function testConfig(overrides = {}) {
   return { ...resolveRuntimeConfig({ SWARM_API_BASE_URL: "https://api.example", SWARM_MCP_PROFILE: "test" }), ...overrides };
