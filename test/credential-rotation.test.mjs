@@ -17,6 +17,10 @@ const replacement = () => jsonResponse({ access_token: "swa_" + "b".repeat(64), 
   expires_in: 600, scope: "mcp offline_access", token_type: "Bearer" });
 const manager = (config, store, fetchImpl) => new TokenManager({ config, store, fetchImpl, now: () => now });
 const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+// Contenders must have time to start PowerShell and compile Add-Type before
+// exercising the real Windows mutex. These are test-only acquisition budgets.
+const contentionWaitMs = process.platform === "win32" ? 1500 : 60;
+const startupWaitMs = 5000;
 
 test("separate managers reload generations and a late 401 does not rotate the replacement", async () => {
   const config = testConfig();
@@ -141,7 +145,7 @@ test("cancellation after receiving the replacement persists it before releasing 
   const cancelled = assert.rejects(operation, /cancelled/);
   await entered.promise;
   controller.abort(new Error("swr_private-abort-reason"));
-  await assert.rejects(fake.create().load({ waitMs: 60 }), /wait timed out/);
+  await assert.rejects(fake.create().load({ waitMs: contentionWaitMs }), /wait timed out/);
   released.resolve();
   await cancelled;
   assert.equal((await fake.create().load()).accessToken.startsWith("swa_b"), true);
@@ -176,7 +180,7 @@ test("different validated origin/profile owners do not block each other", async 
     { SWARM_API_BASE_URL: "https://api.example", SWARM_MCP_PROFILE: "other" },
     { SWARM_API_BASE_URL: "https://other.example", SWARM_MCP_PROFILE: "test" }
   ]) {
-    await withCredentialLock(resolveRuntimeConfig(env).credentialAccount, () => {}, { directory: fake.lockDirectory, waitMs: 1000 });
+    await withCredentialLock(resolveRuntimeConfig(env).credentialAccount, () => {}, { directory: fake.lockDirectory, waitMs: startupWaitMs });
   }
   released.resolve();
   await holding;
@@ -200,7 +204,7 @@ test("stored replacement cannot add an unsupported OAuth scope", async () => {
   assert.equal(fake.records.size, 0);
 });
 
-test("bounded waits and cancellation cannot release a live process's ownership", async () => {
+test("bounded waits and cancellation cannot release a live process's ownership", { timeout: 15000 }, async () => {
   const config = testConfig();
   const fake = fakeSecureStore(config);
   const entered = deferred();
@@ -211,31 +215,44 @@ test("bounded waits and cancellation cannot release a live process's ownership",
     lease.assertOwned();
   }, { directory: fake.lockDirectory });
   await entered.promise;
-  const options = { directory: fake.lockDirectory, waitMs: 60 };
+  const options = { directory: fake.lockDirectory, waitMs: contentionWaitMs };
   let enteredContender = false;
   const operation = () => { enteredContender = true; };
-  await assert.rejects(withCredentialLock(config.credentialAccount, operation, options), /wait timed out/);
-  const controller = new AbortController();
-  const cancelled = withCredentialLock(config.credentialAccount, operation, { ...options, waitMs: 5000, signal: controller.signal });
-  controller.abort(new Error("swr_private-abort-reason"));
-  await assert.rejects(cancelled, (error) => /cancelled/.test(error.message) && !error.message.includes("swr_"));
-  await assert.rejects(withCredentialLock(config.credentialAccount, operation, options), /wait timed out/);
-  assert.equal(enteredContender, false);
-  released.resolve();
-  await held;
-  await withCredentialLock(config.credentialAccount, operation, options);
+  try {
+    await assert.rejects(withCredentialLock(config.credentialAccount, operation, options), /wait timed out/);
+    const controller = new AbortController();
+    const cancelled = withCredentialLock(config.credentialAccount, operation, { ...options, waitMs: startupWaitMs, signal: controller.signal });
+    controller.abort(new Error("swr_private-abort-reason"));
+    await assert.rejects(cancelled, (error) => /cancelled/.test(error.message) && !error.message.includes("swr_"));
+    await assert.rejects(withCredentialLock(config.credentialAccount, operation, options), /wait timed out/);
+    assert.equal(enteredContender, false);
+  } finally {
+    released.resolve();
+    await held;
+  }
+  // A fresh, uncontended broker still needs its bounded startup allowance.
+  await withCredentialLock(config.credentialAccount, operation, { ...options, waitMs: startupWaitMs });
   assert.equal(enteredContender, true);
 });
 
 const fixture = fileURLToPath(new URL("./fixtures/credential-worker.mjs", import.meta.url));
 
-async function childFixture(t) {
-  const root = await mkdtemp(join(tmpdir(), "swarm-mcp-synthetic-processes-"));
+async function childFixture(t, { fileStore = false } = {}) {
+  const root = await mkdtemp(join(tmpdir(), "swarm mcp synthetic processes-"));
   await writeFile(join(root, "provider-generation"), "1");
   const children = [];
   const events = [];
   const waiters = [];
+  const failures = new Map();
   let nextID = 0;
+  const diagnostic = (value) => /swa_|swr_/.test(String(value)) ? "[redacted credential diagnostic]" : String(value).slice(0, 1000);
+  const completedBefore = (message, event) => new Error(`Synthetic child completed before ${event}: ${diagnostic(message.error || "unexpected result")}`);
+  const fail = (child, error) => {
+    failures.set(child, error);
+    for (let i = waiters.length - 1; i >= 0; i -= 1) if (waiters[i].child === child) {
+      const [waiter] = waiters.splice(i, 1); waiter.reject(error);
+    }
+  };
   t.after(async () => {
     for (const child of children) {
       if (child.exitCode === null && child.signalCode === null) { const closed = once(child, "close"); child.kill("SIGKILL"); await closed; }
@@ -246,14 +263,20 @@ async function childFixture(t) {
     const matches = (item) => item.child === child && item.message.event === event && (id === undefined || item.message.id === id);
     const existing = events.find(matches);
     if (existing) return Promise.resolve(existing.message);
+    const completed = event !== "result" && id !== undefined && events.find((item) =>
+      item.child === child && item.message.event === "result" && item.message.id === id);
+    if (completed) return Promise.reject(completedBefore(completed.message, event));
+    if (failures.has(child)) return Promise.reject(failures.get(child));
     return new Promise((resolve, reject) => {
-      const waiter = { matches, resolve: (value) => { clearTimeout(timer); resolve(value); } };
+      const waiter = { child, event, id, matches,
+        resolve: (value) => { clearTimeout(timer); resolve(value); },
+        reject: (error) => { clearTimeout(timer); reject(error); } };
       const timer = setTimeout(() => { waiters.splice(waiters.indexOf(waiter), 1); reject(new Error(`Synthetic child did not reach ${event}`)); }, 8000);
       waiters.push(waiter);
     });
   };
   const spawn = async (profile = "isolated") => {
-    const child = fork(fixture, ["worker", root, profile], { stdio: ["ignore", "pipe", "pipe", "ipc"] });
+    const child = fork(fixture, [fileStore ? "worker-file" : "worker", root, profile], { stdio: ["ignore", "pipe", "pipe", "ipc"] });
     children.push(child);
     let diagnostics = "";
     child.stdout.on("data", (chunk) => { diagnostics += chunk; });
@@ -261,11 +284,20 @@ async function childFixture(t) {
     child.on("message", (message) => {
       const item = { child, message };
       events.push(item);
-      for (let i = waiters.length - 1; i >= 0; i -= 1) if (waiters[i].matches(item)) {
-        const [waiter] = waiters.splice(i, 1); waiter.resolve(message);
+      for (let i = waiters.length - 1; i >= 0; i -= 1) {
+        const waiter = waiters[i];
+        if (waiter.matches(item)) {
+          waiters.splice(i, 1); waiter.resolve(message);
+        } else if (waiter.child === child && waiter.event !== "result" && waiter.id !== undefined && message.event === "result" && message.id === waiter.id) {
+          waiters.splice(i, 1); waiter.reject(completedBefore(message, waiter.event));
+        }
       }
     });
-    child.on("close", () => { assert.equal(/swa_|swr_/.test(diagnostics), false, "child diagnostics must remain secret-free"); });
+    child.on("error", (error) => fail(child, new Error(`Synthetic child failed: ${diagnostic(error.code || error.message)}`)));
+    child.on("close", (code, signal) => {
+      fail(child, new Error(`Synthetic child closed (code ${code}, signal ${signal}): ${diagnostic(diagnostics)}`));
+      assert.equal(/swa_|swr_/.test(diagnostics), false, "child diagnostics must remain secret-free");
+    });
     await wait(child, "ready");
     return child;
   };
@@ -274,6 +306,29 @@ async function childFixture(t) {
   const kill = async (child) => { const closed = once(child, "close"); child.kill("SIGKILL"); await closed; };
   return { root, spawn, wait, start, run, kill, events };
 }
+
+test("synchronous synthetic storage shares recovery and reports premature child results and exits", { timeout: 15000 }, async (t) => {
+  // Exercise the Windows fixture backend locally without replacing the OS lock.
+  const f = await childFixture(t, { fileStore: true });
+  const a = await f.spawn("file-fixture");
+  const b = await f.spawn("file-fixture");
+  assert.equal((await f.run(a, "seed")).result, true);
+  assert.equal((await f.run(b, "load")).result, "1");
+  const { account } = await f.wait(a, "ready");
+  await writeFile(join(f.root, `fail-${account}`), "synthetic failure");
+  assert.match((await f.run(a, "access")).error, /recovery/);
+  await unlink(join(f.root, `fail-${account}`));
+  assert.equal((await f.run(b, "access")).result, "2");
+  assert.equal(f.events.filter((item) => item.message.event === "provider-committed").length, 1);
+  assert.equal(f.events.some((item) => item.message.event === "consumed-proof"), false);
+  const id = f.start(a, "connect", { pauseConnect: true });
+  await assert.rejects(f.wait(a, "connect-owned", id), /completed before connect-owned:.*already connected/);
+  await assert.rejects(f.wait(a, "connect-owned", id), /completed before connect-owned:.*already connected/);
+  const closed = assert.rejects(f.wait(b, "unreachable"), /Synthetic child closed/);
+  await f.kill(b);
+  await closed;
+  await assert.rejects(f.wait(b, "unreachable"), /Synthetic child closed/);
+});
 
 test("independent processes serialize delayed refresh replies and share the durable generation", { timeout: 15000 }, async (t) => {
   const f = await childFixture(t);
@@ -285,13 +340,18 @@ test("independent processes serialize delayed refresh replies and share the dura
   const refreshB = f.start(b, "access");
   await f.wait(b, "started", refreshB);
   const account = (await f.wait(a, "ready")).account;
-  await assert.rejects(withCredentialLock(account, () => { throw new Error("must not acquire"); }, { directory: join(f.root, "locks"), waitMs: 60 }), /wait timed out/);
+  await assert.rejects(withCredentialLock(account, () => { throw new Error("must not acquire"); }, { directory: join(f.root, "locks"), waitMs: contentionWaitMs }), /wait timed out/);
   a.send({ release: "provider" });
   assert.equal((await f.wait(a, "result", refreshA)).result, "2");
   assert.equal((await f.wait(b, "result", refreshB)).result, "2");
   assert.equal(f.events.filter((item) => item.message.event === "provider-committed").length, 1);
   assert.equal(f.events.some((item) => item.message.event === "consumed-proof"), false);
-  const files = await readdir(join(f.root, "locks"));
+  // Windows uses a named kernel mutex and intentionally creates no lock files.
+  const files = await readdir(join(f.root, "locks")).catch((error) => {
+    if (process.platform === "win32" && error.code === "ENOENT") return [];
+    throw error;
+  });
+  if (process.platform !== "win32") assert.ok(files.length > 0);
   for (const name of files) assert.equal((await readFile(join(f.root, "locks", name))).length, 0);
 });
 
@@ -299,7 +359,7 @@ test("a second process recovers pending rotation after secure current-slot persi
   const f = await childFixture(t);
   const a = await f.spawn();
   const b = await f.spawn();
-  await f.run(a, "seed");
+  assert.equal((await f.run(a, "seed")).result, true);
   const { account } = await f.wait(a, "ready");
   await writeFile(join(f.root, `fail-${account}`), "synthetic failure");
   assert.match((await f.run(a, "access")).error, /recovery/);
@@ -317,7 +377,7 @@ test("simultaneous process connects hold ownership through authorization and can
   const connectB = f.start(b, "connect");
   await f.wait(b, "started", connectB);
   const { account } = await f.wait(a, "ready");
-  await assert.rejects(withCredentialLock(account, () => {}, { directory: join(f.root, "locks"), waitMs: 60 }), /wait timed out/);
+  await assert.rejects(withCredentialLock(account, () => {}, { directory: join(f.root, "locks"), waitMs: contentionWaitMs }), /wait timed out/);
   a.send({ release: "connect" });
   assert.equal((await f.wait(a, "result", connectA)).result, true);
   assert.match((await f.wait(b, "result", connectB)).error, /already connected.*disconnect/);
@@ -329,7 +389,7 @@ for (const phase of ["provider", "pending"]) {
     const f = await childFixture(t);
     const a = await f.spawn();
     const b = await f.spawn();
-    await f.run(a, "seed");
+    assert.equal((await f.run(a, "seed")).result, true);
     const id = f.start(a, "access", phase === "provider" ? { pauseProvider: true } : { pausePending: true });
     await f.wait(a, phase === "provider" ? "provider-committed" : "pending-durable", id);
     await f.kill(a);
@@ -348,7 +408,7 @@ test("disconnect waits for a delayed refresh, then cached clients see removal an
   const f = await childFixture(t);
   const a = await f.spawn();
   const b = await f.spawn();
-  await f.run(a, "seed");
+  assert.equal((await f.run(a, "seed")).result, true);
   const refresh = f.start(a, "access", { pauseProvider: true });
   await f.wait(a, "provider-committed", refresh);
   const disconnect = f.start(b, "disconnect");

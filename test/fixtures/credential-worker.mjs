@@ -2,7 +2,7 @@ import { readFile, writeFile, unlink, access } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { closeSync } from "node:fs";
+import { closeSync, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { createCredential } from "../../src/auth/credential.mjs";
 import { createSecureCredentialStore } from "../../src/auth/secure-store.mjs";
 import { TokenManager } from "../../src/auth/token-manager.mjs";
@@ -49,6 +49,25 @@ if (mode === "command") {
   let job;
   const gate = (name) => new Promise((resolve) => { gates.set(name, resolve); });
   const notify = (event, fields = {}) => process.send({ event, ...fields });
+  // The Windows mutex broker accepts only Credential Manager operations, not
+  // arbitrary helpers. Keep synthetic I/O synchronous in this worker so killing
+  // it cannot leave an outstanding writer after its broker observes stdin EOF.
+  const fileStore = process.platform === "win32" || mode === "worker-file";
+  const fileRunner = (_command, args, { input } = {}) => {
+    const scopedAccount = args.at(-2), action = args.at(-1);
+    const path = join(root, `${scopedAccount}.fake-secret`);
+    if (action === "load") {
+      try { return { stdout: readFileSync(path, "utf8") }; }
+      catch (error) { if (error.code !== "ENOENT") throw error; return { stdout: "" }; }
+    }
+    if (action === "save") {
+      if (existsSync(join(root, `fail-${scopedAccount}`))) throw new Error("Synthetic store write failed");
+      writeFileSync(path, input, { mode: 0o600 });
+    } else if (action === "remove") {
+      try { unlinkSync(path); } catch (error) { if (error.code !== "ENOENT") throw error; }
+    } else { throw new Error("Invalid synthetic store action"); }
+    return { stdout: "" };
+  };
   const adapterFactory = (scoped, runner) => ({
     name: "Synthetic child-process secure store",
     async load() { return (await runner(process.execPath, [fileURLToPath(import.meta.url), "command", root, profile, scoped.credentialAccount, "load"])).stdout || null; },
@@ -62,7 +81,9 @@ if (mode === "command") {
     },
     async remove() { await runner(process.execPath, [fileURLToPath(import.meta.url), "command", root, profile, scoped.credentialAccount, "remove"]); return true; }
   });
-  const store = createSecureCredentialStore(config, { adapterFactory, lockDirectory: join(root, "locks") });
+  const store = createSecureCredentialStore(config, {
+    adapterFactory, lockDirectory: join(root, "locks"), runner: fileStore ? fileRunner : undefined
+  });
   const manager = new TokenManager({ config, store, now: () => Date.parse(stamp), fetchImpl: async (_url, options) => {
     const generation = Number(await readFile(join(root, "provider-generation"), "utf8"));
     if (new URLSearchParams(options.body).get("refresh_token") !== token("swr_", generation)) {
