@@ -17,7 +17,6 @@ try {
     const config = resolveRuntimeConfig();
     const store = createSecureCredentialStore(config);
     if (command.kind === "connect") {
-      if (await store.load()) throw new Error("This profile is already connected. Manage or revoke it in Swarm before replacing local access.");
       const connected = await connectBrowser(config, store, {
         onManualURL: (url) => process.stderr.write(`Open this Swarm authorization URL:\n${url}\n`)
       });

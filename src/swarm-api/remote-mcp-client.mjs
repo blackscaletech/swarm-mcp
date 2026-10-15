@@ -17,10 +17,10 @@ export class RemoteMCPClient {
     let token = await this.tokenManager.accessToken();
     let result = await this.send(native, token);
     if (result.response.status === 401) {
-      token = await this.tokenManager.accessToken({ forceRefresh: true });
+      token = await this.tokenManager.accessToken({ forceRefresh: true, rejectedToken: token });
       result = await this.send(native, token);
     }
-    if (result.response.status === 401) throw new Error("Swarm access is no longer active. Run `swarm-mcp connect` again.");
+    if (result.response.status === 401) throw new Error("Swarm access is no longer active. Explicitly run `swarm-mcp disconnect`, then `swarm-mcp connect`.");
     if (!isRecord(result.value) || result.value.jsonrpc !== "2.0" || !sameID(result.value.id, message.id)) {
       throw new Error("Swarm returned an invalid MCP response");
     }
@@ -74,6 +74,8 @@ export function nativeRequest(message, defaultSpaceId = "", spaceScopedTools = n
   }
   if (message.method !== "server/discover") {
     params._meta = {
+      "io.modelcontextprotocol/protocolVersion": NATIVE_PROTOCOL_VERSION,
+      "io.modelcontextprotocol/clientCapabilities": {},
       [CLIENT_INFO_META_KEY]: { name: "@blackscaletech/swarm-mcp", version: PACKAGE_VERSION }
     };
   }

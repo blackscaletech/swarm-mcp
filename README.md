@@ -15,7 +15,7 @@ Your app opens Swarm in the browser. Sign in, select the Spaces the app may use,
 For apps that require a local stdio server:
 
 ```bash
-npx -y @blackscaletech/swarm-mcp@0.3.2 connect
+npx -y @blackscaletech/swarm-mcp@0.4.0 connect
 ```
 
 Then add the stdio command from [the examples](examples). The package stores rotating Swarm access in macOS Keychain, Windows Credential Manager, or Linux Secret Service. It does not create a token file or accept a token environment variable.
@@ -49,6 +49,23 @@ swarm-mcp disconnect    Remove access from this device
 ```
 
 Removing local access does not silently revoke the server-side client Identity. Disconnect the app in Swarm to revoke its Credential and Permits while preserving historical lineage.
+
+## Local Credential Recovery
+
+This release serializes credential operations by validated origin/profile
+across local processes. Each owner reloads the secure-store generation before
+refreshing. Successful replacements are journaled in the operating-system
+credential store before promotion; no bearer material is written into the lock
+files. An unknown refresh outcome is not retried with a possibly consumed proof.
+Transient store recovery can be retried. Replacing unavailable access explicitly
+uses `disconnect`, then `connect`; existing profiles are not deleted automatically.
+
+Unix coordination requires `/usr/bin/perl`, its core modules and a local
+flock-capable filesystem. Windows uses an OS-owned mutex and synchronous
+Credential Manager calls. Older package processes do not participate in this
+protocol and must be stopped before upgrading that profile. Platform credential
+store round trips are checked separately from isolated fake-store unit tests;
+neither establishes safe concurrent use by old and new package processes.
 
 ## Security
 

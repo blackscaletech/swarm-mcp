@@ -1,7 +1,7 @@
 {
   "schemaVersion": "swarm.mcp.remote-contract.v1",
   "package": "@blackscaletech/swarm-mcp",
-  "packageVersion": "0.3.2",
+  "packageVersion": "0.4.0",
   "clientId": "https://swarm.services/clients/swarm-mcp",
   "resourcePath": "/mcp",
   "nativeProtocolVersion": "2026-07-28",
