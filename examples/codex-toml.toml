@@ -3,7 +3,7 @@
 
 [mcp_servers.swarm]
 command = "npx"
-args = ["-y", "@blackscaletech/swarm-mcp@0.3.2"]
+args = ["-y", "@blackscaletech/swarm-mcp@0.4.0"]
 
 # Run this once before starting Codex:
-# npx -y @blackscaletech/swarm-mcp@0.3.2 connect
+# npx -y @blackscaletech/swarm-mcp@0.4.0 connect

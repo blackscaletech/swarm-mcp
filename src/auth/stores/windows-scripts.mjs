@@ -1,4 +1,4 @@
-const CREDENTIAL_API = String.raw`
+export const WINDOWS_CREDENTIAL_API = String.raw`
 using System;
 using System.Runtime.InteropServices;
 
@@ -33,7 +33,7 @@ public static class SwarmCredentialApi {
 }
 `;
 
-const PREAMBLE = `$ErrorActionPreference = "Stop"\nAdd-Type -TypeDefinition @'\n${CREDENTIAL_API}\n'@\n` + String.raw`
+const PREAMBLE = `$ErrorActionPreference = "Stop"\nAdd-Type -TypeDefinition @'\n${WINDOWS_CREDENTIAL_API}\n'@\n` + String.raw`
 $target = [Console]::In.ReadLine()
 if ([String]::IsNullOrWhiteSpace($target) -or $target.Length -gt 256) { exit 1 }
 `;

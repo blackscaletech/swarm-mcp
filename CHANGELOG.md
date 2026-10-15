@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.0 - 2026-10-15
+
+### Upgrade
+
+- Stop older Swarm MCP processes before upgrading a shared origin/profile.
+  Older versions do not participate in the new credential coordination protocol.
+- Unix credential coordination requires `/usr/bin/perl`, its core modules and a
+  local filesystem supporting `flock`. Windows uses an operating-system mutex.
+
+### Fixed
+
+- Serialize credential refresh and replacement across local processes, journal
+  replacements in the operating-system credential store, and preserve unknown
+  refresh outcomes without retrying a potentially consumed proof.
+- Supply required native MCP metadata without claiming upstream client identity
+  or unsupported capabilities.
+- Bound stdio frames by bytes, reject invalid UTF-8 and oversized frames, and
+  stop cleanly when protocol output closes or fails.
+- Bound response reads and cancellation while preserving remote tool discovery,
+  Permit checks, revocation and canonical server authority.
+
 ## 0.3.2 - 2026-10-10
 
 - Apply the configured default Space only to tools whose current remote schema accepts a Space ID.
