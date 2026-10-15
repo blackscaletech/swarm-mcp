@@ -54,7 +54,7 @@ export function validateCredential(value, config) {
   if (credential.clientId !== STDIO_OAUTH_CLIENT_ID || !INSTALLATION_PATTERN.test(credential.installationRef) ||
       credential.profile !== config.profile || issuer !== config.baseUrl || resource !== `${config.baseUrl}/mcp` ||
       credential.tokenEndpoint !== `${config.baseUrl}/oauth/token` ||
-      !scopeKeys.includes("mcp") || !scopeKeys.includes("offline_access")) {
+      scopeKeys.length !== 2 || !scopeKeys.includes("mcp") || !scopeKeys.includes("offline_access")) {
     throw new Error("Stored Swarm access does not match this profile");
   }
   return Object.freeze(credential);

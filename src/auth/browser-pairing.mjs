@@ -9,6 +9,11 @@ import { discoverOAuth } from "./oauth-discovery.mjs";
 import { exchangeAuthorizationCode } from "./oauth-token.mjs";
 
 export async function connectBrowser(config, store, options = {}) {
+  if (typeof store.connect !== "function") throw new Error("Swarm requires a coordinated secure credential store");
+  return store.connect((ownedStore, signal) => pairBrowser(config, ownedStore, { ...options, signal }), { signal: options.signal });
+}
+
+async function pairBrowser(config, store, options) {
   const fetchImpl = options.fetchImpl || fetch;
   const metadata = await withRequestTimeout(config.timeoutMs,
     (signal) => discoverOAuth(config, fetchImpl, signal), options.signal);
@@ -16,6 +21,11 @@ export async function connectBrowser(config, store, options = {}) {
   const verifier = randomBytes(48).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const callback = await (options.createCallback || createLoopbackCallback)({ issuer: metadata.issuer, state });
+  const completion = callback.waitForCode();
+  completion.catch(() => {});
+  const abort = () => callback.close();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
   try {
     const authorizationURL = new URL(metadata.authorizationEndpoint);
     for (const [key, value] of Object.entries({
@@ -30,7 +40,7 @@ export async function connectBrowser(config, store, options = {}) {
     })) authorizationURL.searchParams.set(key, value);
     const opened = await (options.openBrowser || openBrowser)(authorizationURL.toString(), options.browserOptions);
     if (!opened && options.onManualURL) options.onManualURL(authorizationURL.toString());
-    const code = await callback.waitForCode();
+    const code = await completion;
     const token = await withRequestTimeout(config.timeoutMs, (signal) => exchangeAuthorizationCode({
       clientId: STDIO_OAUTH_CLIENT_ID, code, metadata, redirectUri: callback.redirectUri, verifier
     }, fetchImpl, signal), options.signal);
@@ -54,6 +64,9 @@ export async function connectBrowser(config, store, options = {}) {
   } catch (error) {
     callback.close();
     throw error;
+  } finally {
+    options.signal?.removeEventListener("abort", abort);
+    callback.close();
   }
 }
 

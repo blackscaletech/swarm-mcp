@@ -1,6 +1,7 @@
 import { createCredential, credentialExpiresSoon } from "./credential.mjs";
 import { withRequestTimeout } from "../swarm-api/request-timeout.mjs";
 import { refreshAccess } from "./oauth-token.mjs";
+import { CredentialStateError } from "./secure-store.mjs";
 
 export class TokenManager {
   constructor({ config, store, fetchImpl = fetch, now = () => Date.now() }) {
@@ -9,36 +10,42 @@ export class TokenManager {
     this.fetchImpl = fetchImpl;
     this.now = now;
     this.credential = null;
-    this.refreshPromise = null;
+    if (typeof store.transaction !== "function") throw new Error("Swarm requires a coordinated secure credential store");
   }
 
-  async accessToken({ forceRefresh = false } = {}) {
-    if (!this.credential) this.credential = await this.store.load();
-    if (!this.credential) throw new Error("Swarm is not connected. Run `swarm-mcp connect` first.");
-    if (forceRefresh || credentialExpiresSoon(this.credential, this.now())) await this.refresh();
-    return this.credential.accessToken;
+  async accessToken({ forceRefresh = false, rejectedToken, signal } = {}) {
+    const observed = rejectedToken || this.credential?.accessToken;
+    return this.store.transaction(async (tx) => {
+      const current = tx.load();
+      if (!current) {
+        this.credential = null;
+        throw new CredentialStateError("Swarm is not connected. Run `swarm-mcp connect` first.");
+      }
+      // A newer generation already resolves a 401 for an older access token.
+      const needsRefresh = credentialExpiresSoon(current, this.now()) ||
+        (forceRefresh && (!observed || observed === current.accessToken));
+      this.credential = needsRefresh ? await this.refreshCredential(tx, current) : current;
+      if (tx.signal.aborted) throw new CredentialStateError("Swarm credential operation was cancelled.");
+      return this.credential.accessToken;
+    }, { signal });
   }
 
-  async refresh() {
-    if (this.refreshPromise) return this.refreshPromise;
-    this.refreshPromise = this.refreshCredential();
-    try {
-      return await this.refreshPromise;
-    } finally {
-      this.refreshPromise = null;
-    }
+  async refresh(options = {}) {
+    await this.accessToken({ ...options, forceRefresh: true });
+    return this.credential;
   }
 
-  async refreshCredential() {
-    const current = this.credential || await this.store.load();
-    if (!current) throw new Error("Swarm is not connected. Run `swarm-mcp connect` first.");
+  async refreshCredential(tx, current) {
+    await tx.beginRefresh();
     let token;
     try {
       token = await withRequestTimeout(this.config.timeoutMs,
-        (signal) => refreshAccess({ credential: current }, this.fetchImpl, signal));
+        (signal) => refreshAccess({ credential: current }, this.fetchImpl, signal), tx.signal);
       if (token.refreshToken === current.refreshToken) throw new Error("refresh credential did not rotate");
-    } catch {
-      throw new Error("Swarm access could not be refreshed. Run `swarm-mcp connect` again.");
+    } catch (error) {
+      throw new CredentialStateError(error?.kind === "revoked"
+        ? "Swarm access is no longer active. Explicitly run `swarm-mcp disconnect`, then `swarm-mcp connect`."
+        : "Swarm refresh outcome could not be verified. Retry local recovery; if unavailable, explicitly disconnect and connect again. No consumed proof will be retried.");
     }
     const now = new Date(this.now());
     const next = createCredential({
@@ -49,8 +56,6 @@ export class TokenManager {
       scopeKeys: token.scopeKeys,
       updatedAt: now.toISOString()
     }, this.config);
-    await this.store.save(next);
-    this.credential = next;
-    return next;
+    return tx.replace(next);
   }
 }

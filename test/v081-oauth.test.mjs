@@ -5,7 +5,7 @@ import { connectBrowser } from "../src/auth/browser-pairing.mjs";
 import { STDIO_OAUTH_CLIENT_ID } from "../src/protocol/constants.mjs";
 import { createLoopbackCallback } from "../src/auth/loopback-callback.mjs";
 import { discoverOAuth } from "../src/auth/oauth-discovery.mjs";
-import { jsonResponse, oauthMetadata, testConfig } from "./v081-helpers.mjs";
+import { fakeSecureStore, jsonResponse, oauthMetadata, testConfig } from "./v081-helpers.mjs";
 
 test("browser pairing uses pre-registered native PKCE and stores only the completed credential", async () => {
   const config = testConfig();
@@ -23,7 +23,8 @@ test("browser pairing uses pre-registered native PKCE and stores only the comple
   };
   let authorizationURL;
   let saved;
-  const result = await connectBrowser(config, { name: "Test secure store", save: async (value) => { saved = value; } }, {
+  const store = fakeSecureStore(config, null, { save: async (account, value) => { if (account === config.credentialAccount) saved = JSON.parse(value); } }).store;
+  const result = await connectBrowser(config, store, {
     createCallback: async ({ issuer, state }) => ({
       close() {},
       redirectUri: "http://127.0.0.1:49152/swarm-mcp/callback",
@@ -88,7 +89,7 @@ test("browser-open failure returns the non-secret authorization URL for manual o
     refresh_token: "swr_" + "r".repeat(64), scope: "mcp offline_access", token_type: "Bearer"
   })];
   let manualURL = "";
-  await connectBrowser(config, { name: "Store", save: async () => {} }, {
+  await connectBrowser(config, fakeSecureStore(config).store, {
     createCallback: async () => ({ close() {}, redirectUri: "http://127.0.0.1:49152/swarm-mcp/callback", waitForCode: async () => "c".repeat(64) }),
     fetchImpl: async () => responses.shift(),
     onManualURL: (value) => { manualURL = value; },

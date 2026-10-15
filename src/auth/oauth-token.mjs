@@ -33,7 +33,11 @@ async function requestToken(endpoint, form, fetchImpl, signal) {
     method: "POST",
     signal
   }, TOKEN_RESPONSE_LIMIT_BYTES);
-  if (!result.response.ok || !isRecord(result.value)) throw new Error("Swarm access could not be issued");
+  if (!result.response.ok || !isRecord(result.value)) {
+    const error = new Error("Swarm access could not be issued");
+    if (result.response.status === 400 && result.value?.error === "invalid_grant") error.kind = "revoked";
+    throw error;
+  }
   const accessToken = boundedToken(result.value.access_token);
   const refreshToken = boundedToken(result.value.refresh_token);
   const expiresIn = Number(result.value.expires_in);
