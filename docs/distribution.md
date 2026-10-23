@@ -16,6 +16,10 @@ canonical HTTPS endpoint. The client discovers OAuth and the user's approved
 Spaces during sign-in; no credential, static client secret, Space ID, or
 private service detail belongs in these files.
 
+`assets/swarm-logo.png` is a public copy of the reviewed Swarm brand mark used
+for directory artwork. Its canonical design source remains in the private
+Swarm product; it is not a separate logo to edit here.
+
 Before updating a listing, run `npm test` and `npm pack --dry-run` locally,
 check the hosted endpoint's OAuth challenge, and verify the published page.
 Do not claim publication or approval from the presence of a manifest alone.
