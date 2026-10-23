@@ -21,5 +21,8 @@ test("directory metadata points only to the canonical remote MCP endpoint", () =
   assert.deepEqual(Object.keys(cursor.mcpServers.swarm), ["url"]);
   assert.equal(plugin.name, "swarm");
   assert.equal(plugin.repository, registry.repository.url);
+  assert.equal(plugin.displayName, "Swarm");
+  assert.equal(plugin.publisher, "Blackscale");
+  assert.equal(plugin.logo, "assets/swarm-logo.png");
   assert.deepEqual(glama.maintainers, ["blackscaletech"]);
 });
