@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.blackscaletech/swarm",
+  "title": "Swarm",
+  "description": "Connect AI agents to shared Spaces for context, sourced work, tasks, and runs.",
+  "repository": {
+    "url": "https://github.com/blackscaletech/swarm-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.swarm.services/mcp"
+    }
+  ]
+}

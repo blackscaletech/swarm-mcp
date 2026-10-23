@@ -1,0 +1,18 @@
+{
+  "name": "swarm",
+  "version": "0.1.0",
+  "description": "Connect Cursor to shared Swarm Spaces for context, source-linked decisions, tasks, and runs.",
+  "author": {
+    "name": "Blackscale",
+    "email": "hello@swarm.services"
+  },
+  "homepage": "https://swarm.services",
+  "repository": "https://github.com/blackscaletech/swarm-mcp",
+  "license": "Apache-2.0",
+  "keywords": [
+    "mcp",
+    "collaboration",
+    "agent-workflows"
+  ],
+  "logo": "https://swarm.services/favicon.ico"
+}

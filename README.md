@@ -73,6 +73,9 @@ The package is a transport and contract consumer. It cannot grant authority, cal
 
 See [Architecture](docs/architecture.md), [Permission model](docs/permission-matrix.md), [Threat model](docs/threat-model.md), and [Security policy](SECURITY.md).
 
+Public MCP directory and Cursor listing metadata are maintained separately
+from the runtime. See [MCP discovery](docs/distribution.md).
+
 ## Development
 
 ```bash
