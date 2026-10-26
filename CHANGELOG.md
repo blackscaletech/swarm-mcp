@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.1 - 2026-10-25
+
+### Fixed
+
+- Merge remote MCP resources with local guidance on the first catalog page,
+  preserving pagination, metadata, and local resource URI precedence.
+- Forward remote resource reads through the authenticated Swarm MCP endpoint,
+  including UI content and metadata, without fetching resource URIs locally.
+- Keep local guidance reads local, reject invalid resource URIs, and preserve
+  remote authorization failures and sanitized transport errors.
+
+### Compatibility
+
+- Resource discovery now requires the authenticated remote resource catalog;
+  remote failures are returned instead of a local-only fallback. Known local
+  resource URIs remain readable without a remote request.
+
 ## 0.4.0 - 2026-10-15
 
 ### Upgrade

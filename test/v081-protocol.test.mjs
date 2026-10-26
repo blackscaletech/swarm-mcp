@@ -40,6 +40,36 @@ test("prompts and resources are sanitized local guidance without credentials", a
   assert.doesNotMatch(encoded, /swa_|swr_|access_token|refresh_token/i);
 });
 
+test("resource discovery merges local guidance with paginated API resources and delegates UI reads", async () => {
+  const calls = [];
+  const uri = "ui://swarm/spaces-v1.html";
+  const html = { contents: [{ uri, mimeType: "text/html;profile=mcp-app", text: "<html>Swarm view</html>", _meta: { ui: { csp: {} } } }] };
+  const server = new SwarmMCPServer({ config: testConfig(), secureStoreName: "Store", remoteClient: {
+    async request(message) {
+      calls.push(message);
+      return { jsonrpc: "2.0", id: message.id, result: message.method === "resources/list"
+        ? { resources: [{ uri, name: "swarm-spaces" }], nextCursor: "opaque-page", _meta: { cacheScope: "private" } } : html };
+    }
+  } });
+  await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize" });
+  const first = await server.handle({ jsonrpc: "2.0", id: 2, method: "resources/list" });
+  assert.equal(first.result.resources.length, 4);
+  assert.equal(first.result.resources.filter((item) => item.uri === uri).length, 1);
+  assert.equal(first.result.nextCursor, "opaque-page");
+  assert.deepEqual(first.result._meta, { cacheScope: "private" });
+  const next = await server.handle({ jsonrpc: "2.0", id: 3, method: "resources/list", params: { cursor: "opaque-page" } });
+  assert.equal(next.result.resources.length, 1);
+  assert.deepEqual(calls.at(-1).params, { cursor: "opaque-page" });
+  const read = await server.handle({ jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri } });
+  assert.deepEqual(read.result, html);
+  assert.deepEqual(calls.at(-1), { jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri } });
+  const beforeLocalRead = calls.length;
+  await server.handle({ jsonrpc: "2.0", id: 5, method: "resources/read", params: { uri: "swarm://docs/security" } });
+  assert.equal(calls.length, beforeLocalRead);
+  const invalid = await server.handle({ jsonrpc: "2.0", id: 6, method: "resources/read", params: { uri: {} } });
+  assert.equal(invalid.error.code, -32602);
+});
+
 test("stdio framing is bounded and notifications produce no response", async () => {
   const input = new PassThrough();
   const output = new PassThrough();
@@ -115,7 +145,9 @@ test("remote failures are sanitized at the stdio protocol boundary", async () =>
     config: testConfig(), remoteClient: { request: async () => { throw new Error("swr_secret raw provider payload"); } }, secureStoreName: "Store"
   });
   await server.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} });
-  const response = await server.handle({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
-  assert.deepEqual(response.error, { code: -32603, message: "Swarm request failed" });
-  assert.doesNotMatch(JSON.stringify(response), /swr_|provider payload/);
+  for (const method of ["tools/list", "resources/list", "resources/read"]) {
+    const response = await server.handle({ jsonrpc: "2.0", id: 2, method, params: { uri: "ui://swarm/spaces-v1.html" } });
+    assert.deepEqual(response.error, { code: -32603, message: "Swarm request failed" });
+    assert.doesNotMatch(JSON.stringify(response), /swr_|provider payload/);
+  }
 });

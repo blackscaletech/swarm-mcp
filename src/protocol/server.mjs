@@ -39,10 +39,24 @@ export class SwarmMCPServer {
         return failure(message.id, -32602, "Unknown Swarm prompt");
       }
     }
-    if (message.method === METHODS.resourcesList) return success(message.id, { resources: listResources() });
+    if (message.method === METHODS.resourcesList) {
+      const response = await this.remote(message);
+      if (response.error) return response;
+      if (!Array.isArray(response.result?.resources)) return failure(message.id, -32603, "Swarm returned an invalid resource catalog");
+      const local = listResources();
+      const localURIs = new Set(local.map(({ uri }) => uri));
+      return { ...response, result: { ...response.result, resources: [
+        ...(message.params?.cursor ? [] : local),
+        ...response.result.resources.filter((resource) => !localURIs.has(resource?.uri))
+      ] } };
+    }
     if (message.method === METHODS.resourcesRead) {
+      const uri = objectParams(message.params).uri;
+      if (typeof uri !== "string" || !uri || uri.length > 2048) return failure(message.id, -32602, "Invalid Swarm resource");
+      // Remote URIs are opaque MCP identifiers, never URLs to fetch locally.
+      if (!listResources().some((resource) => resource.uri === uri)) return this.remote(message);
       try {
-        return success(message.id, readResource(objectParams(message.params).uri, this.config, this.secureStoreName));
+        return success(message.id, readResource(uri, this.config, this.secureStoreName));
       } catch {
         return failure(message.id, -32602, "Unknown Swarm resource");
       }
